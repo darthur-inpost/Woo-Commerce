@@ -25,9 +25,9 @@ function add_inpost_fields()
 {
 	var base_url = document.location.origin + document.location.pathname;
 
-	var html = '<li id="li_machine">'
+	var html = '';
 
-  	html += '<table border="0px">';
+  	html += '<table id="li_machine" border="0px">';
   
               		html += '<tr>';
                   	html += '<td>';
@@ -54,7 +54,9 @@ function add_inpost_fields()
                   	html += '</td>';
                   	html += '</tr>';
               	html += '</table>';
-	jQuery('#shipping_method').append(html);
+              	html += '</p>';
+	//jQuery('#shipping_method').append(html);
+	jQuery('.woocommerce-billing-fields').append(html);
 }
 
 jQuery(document).ready(function() {
@@ -74,6 +76,7 @@ jQuery(document).ready(function() {
 
 		jQuery('#shipping_method_0_inpost_shipping_method').prop('disabled',
 			true);
+		remove_inpost_fields();
 
 	}
 	else
@@ -83,6 +86,10 @@ jQuery(document).ready(function() {
 		{
 			alert("Please select a Locker to send the Parcel to.");
 			add_inpost_fields();
+		}
+		else
+		{
+			remove_inpost_fields();
 		}
 	}
 
@@ -98,6 +105,7 @@ jQuery(document).ready(function() {
 
 		jQuery('#shipping_method_0_inpost_shipping_method').prop('disabled',
 			true);
+		remove_inpost_fields();
 
 	}
 	else
@@ -107,6 +115,10 @@ jQuery(document).ready(function() {
 		{
 			alert("Please select a Locker to send the Parcel to.");
 			add_inpost_fields();
+		}
+		else
+		{
+			remove_inpost_fields();
 		}
 	}
 
@@ -124,6 +136,7 @@ jQuery( function( $ ) {
 
 		jQuery('#shipping_method_0_inpost_shipping_method').prop('disabled',
 			true);
+		remove_inpost_fields();
 
 	}
 	else
@@ -134,8 +147,30 @@ jQuery( function( $ ) {
 			alert("Please select a Locker to send the Parcel to.");
 			add_inpost_fields();
 		}
+		else
+		{
+			remove_inpost_fields();
+		}
 	}
 
 	});
 });
 
+///
+// remove_inpost_fields function
+//
+// @params none
+// @return none
+//
+function remove_inpost_fields()
+{
+	// Check that the fields are still there before trying to remove them.
+	var field = jQuery('#mobile').get();
+
+	if(field == '')
+	{
+		return;
+	}
+
+	jQuery('#li_machine').remove();
+}

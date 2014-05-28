@@ -3,7 +3,7 @@
  * Plugin Name: InPost
  * Plugin URI: https://github.com/orgs/InPost/dashboard
  * Description: A Parcel and label creation plugin.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: InPost
  * Author URI: http://inpost.co.uk
  * Tested up to: 3.9
@@ -42,12 +42,12 @@ if( ! class_exists( 'WP_List_Table' ) )
 
 if( ! class_exists( 'WC_InPostShippingMethod' ) )
 {
-	require_once('/woocommerce-inpost-shipping-plugin.php');
+	require_once('woocommerce-inpost-shipping-plugin.php');
 }
 
 if( ! class_exists( 'inpostparcelsHelper' ) )
 {
-	require_once('/includes/inpostparcelsHelper.php');
+	require_once('includes/inpostparcelsHelper.php');
 }
 
 class My_Example_List_Table extends WP_List_Table
@@ -110,6 +110,8 @@ class My_Example_List_Table extends WP_List_Table
 		echo '.wp-list-table .column-parcel_status { width: 19%;}';
 		echo '.wp-list-table .column-parcel_target_machine_id { width: 19%;}';
 		echo '.wp-list-table .column-sticker_creation_date { width: 19%;}';
+		echo '.wp-list-table .column-file_name { width: 19%;}';
+
 		echo '.wp-list-table .column-creation_date { width: 19%;}';
 		echo '</style>';
 	}
@@ -133,6 +135,7 @@ class My_Example_List_Table extends WP_List_Table
 			case 'parcel_status':
 			case 'parcel_target_machine_id':
 			case 'sticker_creation_date':
+			case 'file_name':
 			case 'creation_date':
 				return $item[ $column_name ];
 			default:
@@ -169,6 +172,8 @@ class My_Example_List_Table extends WP_List_Table
 
 			return;
 		}
+	
+		$parcel_sticker = array();
 
 		// Check that the last character on the URL is a '/'.
 		// If not add a '/'.
@@ -206,7 +211,7 @@ class My_Example_List_Table extends WP_List_Table
 					$params['url']        = $url . 'parcels';
 					$params['token']      = $key;
 					$params['methodType'] = 'POST';
-					$params['params']['description'] = 'Order # ' . $row;
+					$params['params']['description'] = 'Order # ' . $parcel_data[0]->order_id;
 					$params['params']['receiver'] = array('phone' => $mobile, 'email' => $email);
 					$params['params']['size'] = $size;
 					$params['params']['tmp_id'] = inpostparcelsHelper::generate(4, 15);
@@ -281,6 +286,12 @@ class My_Example_List_Table extends WP_List_Table
 				case 'stickers':
 					// Create the Labels for the selected
 					// parcels
+					if($parcel_data[0]->file_name != '')
+					{
+					// A parcel's label only needs to be
+					// generated once for a line.
+						continue;
+					}
 
 					$parcel_sticker[] = $parcel_id;
 					break;
@@ -289,7 +300,7 @@ class My_Example_List_Table extends WP_List_Table
 			}
 		}
 
-		if($action == 'stickers')
+		if($action == 'stickers' && count($parcel_sticker) > 0)
 		{
 			if(count($parcel_sticker) > 1)
 			{
@@ -315,14 +326,36 @@ class My_Example_List_Table extends WP_List_Table
 
 			if($reply['info']['http_code'] == '200')
 			{
-				$this->update_parcel_sticker($parcel_list);
-				if (ob_get_contents())
+				// Try and save the PDF as a local (server) file
+				$base_name = '/pdf_files/' . 'stickers_' .
+					date('Y-m-d_H-i-s') . '.pdf';
+				$dir_filename = dirname(__FILE__) . $base_name;
+				$filename     = plugins_url('', __FILE__) . $base_name;
+
+				$file = fopen($dir_filename, 'wb');
+
+				if($file != false)
 				{
-					ob_clean();
+				fwrite($file, base64_decode($reply['result']));
+
+				fclose($file);
+
+				// Save the change in status of the parcel.
+				$this->update_parcel_sticker($parcel_list, $filename);
 				}
-				header('Content-type', 'application/pdf');
-				header('Content-Disposition: attachment; filename=stickers_'.date('Y-m-d_H-i-s').'.pdf');
-				echo base64_decode($reply['result']);
+				else
+				{
+				// Failed to save the parcel data.
+				// Tell the user.
+				echo '<div id="message" class="error">';
+					echo '<h1>InPost Failed to Save PDF Labels</h1>';
+					echo '<p>Please check that the folder pdf_files has 777 permisions.</p>';
+					echo '<p>Please contact InPost.</p>';
+				echo '<p>Error Code ' .
+					$file .
+			       	'.</p>';
+				echo '</div>';
+				}
 			}
 			else
 			{
@@ -350,9 +383,11 @@ class My_Example_List_Table extends WP_List_Table
 	{
 		global $wpdb;
 
+		$parcel_status = inpostparcelsHelper::getParcelStatus();
+
 		$sql_data = array(
 			'parcel_id' => $p_id,
-			'parcel_status' => inpostparcelsHelper::getParcelStatus()['Created']
+			'parcel_status' => $parcel_status['Created']
 		);
 
 		$where_data = array(
@@ -395,12 +430,13 @@ class My_Example_List_Table extends WP_List_Table
 	//
 	// @param The order ID to be updated.
 	//
-	private function update_parcel_sticker($id)
+	private function update_parcel_sticker($id, $filename)
 	{
 		global $wpdb;
 
 		$sql_data = array(
-			'sticker_creation_date' => date('Y-m-d H:i:s')
+			'sticker_creation_date' => date('Y-m-d H:i:s'),
+			'file_name' => '<a href="' . $filename . '" target="_blank">Click Here</a>'
 		);
 
 		$new_id = explode(';', $id);
@@ -450,6 +486,7 @@ class My_Example_List_Table extends WP_List_Table
 			'parcel_status' => __('Parcel Status', 'inpost'),
 			'parcel_target_machine_id' => __('Machine ID', 'inpost'),
 			'sticker_creation_date'    => __('Sticker creation date', 'inpost'),
+			'file_name'     => __('Download Link', 'inpost'),
 			'creation_date' => __('Creation date', 'inpost'),
 		);
 		return $columns;
